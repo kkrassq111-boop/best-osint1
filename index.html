@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bestosint // ultimate panel</title>
+<style>
+  :root{
+    --bg:#0a0505; --panel:#140808; --panel2:#1a0a0a; --border:#2e1414; --border2:#3d1a1a;
+    --text:#f0d9d9; --muted:#a86a6a; --dim:#6b3a3a;
+    --accent:#ff2a2a; --accent2:#ff6b6b; --ok:#3ecf8e; --err:#ff5566;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.5;min-height:100vh;overflow:hidden;position:relative}
+
+  /* Матричный фон */
+  #matrixCanvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; opacity: 0.06; pointer-events: none;
+  }
+
+  #contentWrap {
+    position: relative; z-index: 1; height: 100vh; overflow-y: auto;
+  }
+
+  #welcomeScreen { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; transition: opacity 1s ease-in-out; }
+  #welcomeScreen.fade-out { opacity: 0; pointer-events: none; }
+  .welcome-text { font-size: 42px; font-weight: 900; letter-spacing: 4px; color: #fff; text-transform: uppercase; text-align: center; text-shadow: 0 0 10px var(--accent), 0 0 30px var(--accent), 0 0 60px var(--accent2); position: relative; min-height: 50px; }
+  .welcome-sub { margin-top: 16px; font-size: 12px; color: var(--accent); letter-spacing: 8px; text-transform: uppercase; opacity: 0; animation: fadeInSub 2s forwards 2s; }
+  @keyframes fadeInSub { to { opacity: 1; } }
+
+  #mainApp { display: none; }
+  #mainApp.visible { display: block; }
+
+  .hero{width:100%;height:180px;background:#000;border-bottom:2px solid var(--accent);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,42,42,.04) 1px, transparent 1px),linear-gradient(90deg, rgba(255,42,42,.04) 1px, transparent 1px);background-size:24px 24px;z-index:1}
+  .hero-img{width:auto;height:85%;max-width:85%;object-fit:contain;filter:drop-shadow(0 0 15px var(--accent)) drop-shadow(0 0 40px rgba(255,42,42,.4));z-index:2;display:block;transition: transform 0.3s;}
+  .hero-img:hover { transform: scale(1.05) rotate(2deg); filter: drop-shadow(0 0 25px var(--accent)) drop-shadow(0 0 60px rgba(255,42,42,.6)); }
+
+  .topbar{background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;gap:16px;height:42px;position:sticky;top:0;z-index:10}
+  .topbar .logo{font-weight:900;color:var(--accent);letter-spacing:2px;text-shadow: 0 0 10px rgba(255,42,42,.4)}
+  .topbar nav{display:flex;gap:2px;flex-wrap:wrap}
+  .topbar nav button{background:transparent;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:12px;padding:6px 12px;border-radius:4px;transition:.15s}
+  .topbar nav button:hover{color:var(--text);background:var(--panel2)}
+  .topbar nav button.active{color:var(--accent);background:rgba(255,42,42,.12);text-shadow: 0 0 8px var(--accent)}
+  .topbar .right{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:11px;color:var(--dim)}
+  .topbar .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:4px;box-shadow:0 0 6px var(--ok)}
+  .topbar .dot.loading { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1s infinite alternate; }
+  @keyframes pulse { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+  .logout-btn { cursor:pointer; color:var(--accent); text-decoration:underline; margin-left:8px; display:none; }
+
+  .container{max-width:1000px;margin:0 auto;padding:18px;padding-bottom:50px}
+
+  .login-box{max-width:400px;margin:40px auto;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:24px;text-align:center;box-shadow:0 0 30px -10px var(--accent)}
+  .login-box h2{color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:20px;font-size:16px}
+  .login-box input{width:100%;padding:12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:14px;margin-bottom:16px;text-align:center;outline:none;transition:border-color 0.2s}
+  .login-box input:focus{border-color:var(--accent); box-shadow: 0 0 10px rgba(255,42,42,.2)}
+  .login-box button{width:100%;padding:12px;background:var(--accent);color:#0a0505;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:1px;transition: all 0.2s}
+  .login-box button:hover{filter:brightness(1.15); box-shadow: 0 0 15px var(--accent)}
+
+  .search-panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;box-shadow:0 0 20px -10px var(--accent)}
+  .search-panel .stitle{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:7px;display:flex;justify-content:space-between}
+  .search-row{display:flex;gap:10px;flex-wrap:wrap}
+  .search-row input{flex:1;min-width:200px;padding:9px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:13px;outline:none; transition: all 0.2s}
+  .search-row input:focus{border-color:var(--accent); box-shadow: 0 0 10px rgba(255,42,42,.2)}
+  .btn{padding:9px 16px;border:1px solid var(--border2);border-radius:4px;background:var(--panel2);color:var(--text);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:all .15s}
+  .btn:hover{border-color:var(--accent);color:var(--accent); box-shadow: 0 0 10px rgba(255,42,42,.2)}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#0a0505}
+  .btn-primary:hover{filter:brightness(1.15);color:#0a0505; box-shadow: 0 0 15px var(--accent)}
+  .btn-sm{padding:5px 10px;font-size:11px}
+  .btn-save{background:transparent;border-color:var(--ok);color:var(--ok);margin-top:15px;display:block;width:100%;text-align:center}
+  .btn-save:hover{background: rgba(62,207,142,.1); box-shadow: 0 0 10px rgba(62,207,142,.3)}
+
+  .results-box{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .res-card{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:12px;font-size:12px;position:relative; transition: border-color 0.2s}
+  .res-card:hover{border-color: var(--accent)}
+  .res-card .rhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .res-card .rhead .rname{color:var(--accent);font-weight:700;transition: text-shadow 0.1s}
+  .res-card .rhead .rname:hover { text-shadow: 2px 0 red, -2px 0 blue; cursor: crosshair; }
+  .res-card .rhead .rstatus{font-size:10px;padding:2px 6px;border-radius:8px}
+  .res-card .rhead .rstatus.ok{background:rgba(62,207,142,.15);color:var(--ok)}
+  .res-card .rhead .rstatus.err{background:rgba(255,85,102,.15);color:var(--err)}
+  .res-card .rhead .rstatus.load{background:rgba(255,42,42,.15);color:var(--accent2); animation: pulse 1s infinite alternate;}
+  .res-card pre{white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:11px;color:var(--text);max-height:300px;overflow-y:auto}
+  .res-card .field{display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed var(--border)}
+  .res-card .field:last-child{border-bottom:none}
+  .res-card .field .k{color:var(--muted);min-width:80px;text-transform:uppercase;font-size:10px;letter-spacing:1px}
+  .res-card .field .v{color:var(--text);font-weight:bold}
+  .res-card .link-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .res-card .link-grid a{display:inline-block;padding:5px 10px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--accent2);text-decoration:none;font-size:11px;transition:all .15s}
+  .res-card .link-grid a:hover{border-color:var(--accent);background:var(--panel2);box-shadow: 0 0 10px rgba(255,42,42,.2)}
+
+  .posts{display:flex;flex-direction:column;gap:10px}
+  .post{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 16px;transition:all .15s}
+  .post:hover{border-color:var(--accent);box-shadow:0 0 15px -8px var(--accent)}
+  .post .head{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+  .post .title{font-size:14px;font-weight:700;color:#fff}
+  .post .title .id{color:var(--accent);margin-right:6px}
+  .post .meta{display:flex;gap:10px;font-size:11px;color:var(--muted);align-items:center}
+  .post .meta .tag{background:rgba(255,42,42,.12);border:1px solid rgba(255,42,42,.3);color:var(--accent2);padding:1px 7px;border-radius:10px;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+  .post .body{color:var(--text);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+  .post .meta .author{color:var(--accent2);font-weight:bold}
+
+  .toolbar{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .toolbar input{flex:1;min-width:200px;padding:9px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:13px;outline:none}
+  .toolbar input:focus{border-color:var(--accent)}
+
+  .user-form{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px}
+  .user-form .ftitle{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:7px}
+  .form-row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .form-col{flex:1;min-width:160px}
+  .form-row label{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+  .form-row input,.form-row textarea,.form-row select{width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;outline:none}
+  .form-row input:focus,.form-row textarea:focus,.form-row select:focus{border-color:var(--accent)}
+  .form-row textarea{resize:vertical;min-height:80px;line-height:1.5}
+
+  .chat-panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:0;margin-top:16px;overflow:hidden}
+  .chat-head{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;display:flex;justify-content:space-between;align-items:center}
+  .chat-head .st{color:var(--muted);text-transform:none;letter-spacing:0;font-size:10px}
+  .chat-log{height:300px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#080303}
+  .chat-msg{max-width:80%;padding:7px 11px;border-radius:8px;font-size:12px;word-break:break-word;line-height:1.5}
+  .chat-msg.me{align-self:flex-end;background:var(--accent);color:#0a0505}
+  .chat-msg.admin{align-self:flex-start;background:var(--panel2);border:1px solid var(--border2)}
+  .chat-msg .t{font-size:9px;opacity:.6;display:block;margin-bottom:2px}
+  .chat-input-row{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border)}
+  .chat-input-row input{flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;outline:none}
+  .chat-input-row input:focus{border-color:var(--accent)}
+
+  .footer{border-top:1px solid var(--border);margin-top:24px;padding:14px;text-align:center;font-size:10px;color:var(--dim);letter-spacing:1px}
+  .empty{text-align:center;padding:40px 20px;color:var(--dim);font-size:12px;border:1px dashed var(--border2);border-radius:6px}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+</style>
+</head>
+<body>
+
+<canvas id="matrixCanvas"></canvas>
+
+<div id="contentWrap">
+  <div id="welcomeScreen">
+    <div>
+      <div class="welcome-text" id="typewriter"></div>
+      <div class="welcome-sub">добро пожаловать в bestosint</div>
+    </div>
+  </div>
+
+  <div id="mainApp">
+    <div class="hero">
+      <img class="hero-img" src="logo.png" alt="logo">
+    </div>
+
+    <div class="topbar">
+      <div class="logo">bestosint</div>
+      <nav id="mainNav" style="display:none">
+        <button class="active" data-view="search">поиск</button>
+        <button data-view="nick">по нику</button>
+        <button data-view="ip">по ip/домену</button>
+        <button data-view="photo">по фото</button>
+        <button data-view="posts">пасты</button>
+        <button data-view="add">добавить</button>
+        <button data-view="chat">связь</button>
+      </nav>
+      <div class="right">
+        <span><span class="dot" id="statusDot"></span><span id="myIp">IP: ---.---.---.---</span></span>
+        <span id="userBadge">гость</span>
+        <span id="logoutBtn" class="logout-btn" title="Сменить ник">[сменить]</span>
+        <span id="clock">--:--:--</span>
+      </div>
+    </div>
+
+    <div class="container">
+      <div id="viewLogin">
+        <div class="login-box">
+          <h2>вход в систему</h2>
+          <p style="font-size:11px;color:var(--muted);margin-bottom:15px">введи любой логин. пасты увидят все, а чат с админом будет только твой.</p>
+          <input type="text" id="loginInput" placeholder="твой ник" autocomplete="off">
+          <button id="loginBtn">войти</button>
+        </div>
+      </div>
+
+      <div id="appContent" style="display:none">
+        <!-- Поиск API -->
+        <div id="viewSearch">
+          <div class="search-panel">
+            <div class="stitle"><span>поиск по номеру или почте</span><span id="searchStatus" style="color:var(--muted);font-size:10px;text-transform:none"></span></div>
+            <div class="search-row">
+              <input type="text" id="query" placeholder="+79991234567 или example@mail.ru" autocomplete="off">
+              <button class="btn btn-primary" id="searchBtn">искать</button>
+            </div>
+            <div class="results-box" id="results">
+              <div class="empty">введи номер или email и нажми «искать».</div>
+            </div>
+            <button class="btn btn-save" id="saveBtnMain" style="display:none;">скачать .txt отчет</button>
+          </div>
+        </div>
+
+        <!-- Поиск по нику -->
+        <div id="viewNick" style="display:none">
+          <div class="search-panel">
+            <div class="stitle"><span>поиск по нику</span><span id="nickStatus" style="color:var(--muted);font-size:10px;text-transform:none"></span></div>
+            <div class="search-row">
+              <input type="text" id="nickQuery" placeholder="введи ник (например, torvalds)" autocomplete="off">
+              <button class="btn btn-primary" id="nickSearchBtn">собрать ссылки</button>
+            </div>
+            <div class="results-box" id="nickResults">
+              <div class="empty">введи ник и нажми «собрать ссылки».</div>
+            </div>
+            <button class="btn btn-save" id="saveBtnNick" style="display:none;">скачать .txt отчет</button>
+          </div>
+        </div>
+
+        <!-- Поиск по IP -->
+        <div id="viewIp" style="display:none">
+          <div class="search-panel">
+            <div class="stitle"><span>поиск по ip / домену</span><span id="ipStatus" style="color:var(--muted);font-size:10px;text-transform:none"></span></div>
+            <div class="search-row">
+              <input type="text" id="ipQuery" placeholder="8.8.8.8 или google.com" autocomplete="off">
+              <button class="btn btn-primary" id="ipSearchBtn">искать</button>
+            </div>
+            <div class="results-box" id="ipResults">
+              <div class="empty">введи IP или домен и нажми «искать».</div>
+            </div>
+            <button class="btn btn-save" id="saveBtnIp" style="display:none;">скачать .txt отчет</button>
+          </div>
+        </div>
+
+        <!-- Поиск по фото -->
+        <div id="viewPhoto" style="display:none">
+          <div class="search-panel">
+            <div class="stitle"><span>поиск по фото</span></div>
+            <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">вставь прямую ссылку на картинку из интернета</p>
+            <div class="search-row">
+              <input type="text" id="photoQuery" placeholder="https://example.com/photo.jpg" autocomplete="off">
+              <button class="btn btn-primary" id="photoSearchBtn">собрать ссылки</button>
+            </div>
+            <div class="results-box" id="photoResults">
+              <div class="empty">введи ссылку на фото и нажми «собрать ссылки».</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Пасты -->
+        <div id="viewPosts" style="display:none">
+          <div class="toolbar">
+            <input type="text" id="searchInput" placeholder="поиск по пастам..." autocomplete="off">
+            <button class="btn" id="sortBtn" data-mode="new">сначала новые</button>
+          </div>
+          <div class="posts" id="postsBox">
+            <div class="empty">паст пока нет</div>
+          </div>
+        </div>
+
+        <!-- Добавить пасту -->
+        <div id="viewAdd" style="display:none">
+          <div class="user-form">
+            <div class="ftitle">добавить пасту</div>
+            <div class="form-row">
+              <div class="form-col"><label for="uTitle">заголовок</label><input type="text" id="uTitle" maxlength="120" placeholder="заголовок пасты"></div>
+              <div class="form-col" style="max-width:160px"><label for="uTag">тег</label><select id="uTag"><option value="leak">утечка</option><option value="tool">тулза</option><option value="info">инфо</option><option value="scam">скам</option><option value="dox">докс</option></select></div>
+            </div>
+            <div class="form-row"><div class="form-col"><label for="uBody">текст пасты</label><textarea id="uBody" maxlength="8000" placeholder="текст пасты..."></textarea></div></div>
+            <div class="form-row" style="justify-content:flex-end;margin-bottom:0"><button class="btn btn-primary" id="userSave">опубликовать</button></div>
+          </div>
+        </div>
+
+        <!-- Чат -->
+        <div id="viewChat" style="display:none">
+          <div class="chat-panel">
+            <div class="chat-head"><span>личный чат с админом</span><span class="st" id="chatStatus">закрыт</span></div>
+            <div class="chat-log" id="chatLog"></div>
+            <div class="chat-input-row"><input type="text" id="chatInput" placeholder="введи сообщение..." autocomplete="off"><button class="btn btn-primary" id="chatSend">отправить</button></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="footer">bestosint // ultimate panel // local edition</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ===== ВИЗУАЛ =====
+  const canvas = document.getElementById('matrixCanvas');
+  const ctx = canvas.getContext('2d');
+  let width, height, columns, drops;
+  const chars = "01BESTOISNT".split("");
+  const fontSize = 14;
+
+  function resizeCanvas() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+    columns = Math.floor(width / fontSize);
+    drops = [];
+    for (let i = 0; i < columns; i++) drops[i] = 1;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function drawMatrix() {
+    ctx.fillStyle = "rgba(10, 5, 5, 0.05)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#ff2a2a";
+    ctx.font = fontSize + "px monospace";
+    for (let i = 0; i < drops.length; i++) {
+      const text = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+      if (drops[i] * fontSize > height && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  setInterval(drawMatrix, 50);
+
+  const typeTarget = document.getElementById("typewriter");
+  const textToType = "Здравствуйте";
+  let typeIdx = 0;
+  function typeChar() {
+    if (typeIdx < textToType.length) {
+      typeTarget.textContent += textToType.charAt(typeIdx);
+      typeIdx++;
+      setTimeout(typeChar, 100);
+    }
+  }
+  setTimeout(typeChar, 500);
+
+  function playClick() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.05);
+    } catch(e) {}
+  }
+
+  const welcomeScreen = document.getElementById("welcomeScreen");
+  const mainApp = document.getElementById("mainApp");
+
+  setTimeout(function() {
+    welcomeScreen.classList.add("fade-out");
+    setTimeout(function() {
+      welcomeScreen.style.display = "none";
+      mainApp.classList.add("visible");
+      initApp();
+    }, 1000);
+  }, 3000);
+
+  const NUM_LOOKUP_KEY = "num_live_YLjfyLUeqlcIYR9cTUMY3LWJxHxV9CFYKSiQJ9y6";
+  const HIBP_KEY = "00000000000000000000000000000000"; 
+  
+  var KEY_POSTS = "bestosint_posts_global";
+  var KEY_SORT  = "bestosint_sort_v1";
+  var KEY_USER = "bestosint_current_user";
+  var KEY_CHAT_PREFIX = "bestosint_chat_";
+
+  var currentUser = null;
+  var ui = {};
+  var currentReport = "";
+
+  function initApp() {
+    ui = {
+      viewLogin: document.getElementById("viewLogin"),
+      appContent: document.getElementById("appContent"),
+      mainNav: document.getElementById("mainNav"),
+      userBadge: document.getElementById("userBadge"),
+      logoutBtn: document.getElementById("logoutBtn"),
+      loginInput: document.getElementById("loginInput"),
+      loginBtn: document.getElementById("loginBtn"),
+      myIp: document.getElementById("myIp"),
+      statusDot: document.getElementById("statusDot"),
+      
+      viewSearch: document.getElementById("viewSearch"),
+      viewNick: document.getElementById("viewNick"),
+      viewIp: document.getElementById("viewIp"),
+      viewPhoto: document.getElementById("viewPhoto"),
+      viewPosts: document.getElementById("viewPosts"),
+      viewAdd: document.getElementById("viewAdd"),
+      viewChat: document.getElementById("viewChat"),
+      
+      query: document.getElementById("query"),
+      searchBtn: document.getElementById("searchBtn"),
+      results: document.getElementById("results"),
+      searchStatus: document.getElementById("searchStatus"),
+      saveBtnMain: document.getElementById("saveBtnMain"),
+      
+      nickQuery: document.getElementById("nickQuery"),
+      nickSearchBtn: document.getElementById("nickSearchBtn"),
+      nickResults: document.getElementById("nickResults"),
+      nickStatus: document.getElementById("nickStatus"),
+      saveBtnNick: document.getElementById("saveBtnNick"),
+
+      ipQuery: document.getElementById("ipQuery"),
+      ipSearchBtn: document.getElementById("ipSearchBtn"),
+      ipResults: document.getElementById("ipResults"),
+      ipStatus: document.getElementById("ipStatus"),
+      saveBtnIp: document.getElementById("saveBtnIp"),
+
+      photoQuery: document.getElementById("photoQuery"),
+      photoSearchBtn: document.getElementById("photoSearchBtn"),
+      photoResults: document.getElementById("photoResults"),
+      
+      postsBox: document.getElementById("postsBox"),
+      searchInput: document.getElementById("searchInput"),
+      sortBtn: document.getElementById("sortBtn"),
+      
+      uTitle: document.getElementById("uTitle"),
+      uBody: document.getElementById("uBody"),
+      uTag: document.getElementById("uTag"),
+      userSave: document.getElementById("userSave"),
+      
+      chatLog: document.getElementById("chatLog"),
+      chatInput: document.getElementById("chatInput"),
+      chatSend: document.getElementById("chatSend"),
+      chatStatus: document.getElementById("chatStatus"),
+      
+      clock: document.getElementById("clock")
+    };
+
+    function tick(){ var d = new Date(); ui.clock.textContent = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0"); }
+    tick(); setInterval(tick,1000);
+
+    fetch("https://api.ipify.org?format=json").then(r=>r.json()).then(d=>{
+      ui.myIp.textContent = "IP: " + d.ip;
+    }).catch(()=>{});
+
+    function loadJSON(k, f){ try { var r = localStorage.getItem(k); if (!r) return f; var v = JSON.parse(r); return v==null?f:v; } catch(e){ return f; } }
+    function saveJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+
+    function downloadTxt(filename) {
+      if (!currentReport) return;
+      var blob = new Blob([currentReport], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = filename + "_" + Date.now() + ".txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    ui.saveBtnMain.addEventListener("click", ()=>{ playClick(); downloadTxt("phone_email_report"); });
+    ui.saveBtnNick.addEventListener("click", ()=>{ playClick(); downloadTxt("nickname_report"); });
+    ui.saveBtnIp.addEventListener("click", ()=>{ playClick(); downloadTxt("ip_report"); });
+
+    function checkLogin(){
+      var saved = localStorage.getItem(KEY_USER);
+      if (saved){ currentUser = saved; showApp(); } else { showLogin(); }
+    }
+    function doLogin(){
+      playClick();
+      var name = ui.loginInput.value.trim().toLowerCase();
+      if (!name) { ui.loginInput.focus(); return; }
+      currentUser = name;
+      localStorage.setItem(KEY_USER, name);
+      showApp();
+    }
+    function showApp(){
+      ui.viewLogin.style.display = "none";
+      ui.appContent.style.display = "block";
+      ui.mainNav.style.display = "flex";
+      ui.userBadge.textContent = "user: " + currentUser;
+      ui.logoutBtn.style.display = "inline";
+      renderPosts();
+      renderChat();
+    }
+    function showLogin(){
+      ui.viewLogin.style.display = "block";
+      ui.appContent.style.display = "none";
+      ui.mainNav.style.display = "none";
+      ui.userBadge.textContent = "гость";
+      ui.logoutBtn.style.display = "none";
+    }
+    
+    ui.loginBtn.addEventListener("click", doLogin);
+    ui.loginInput.addEventListener("keydown", function(e){ if (e.key === "Enter") doLogin(); });
+    
+    ui.logoutBtn.addEventListener("click", function(){
+      if(confirm("Сменить ник? Текущий чат останется в базе под старым ником.")) {
+        localStorage.removeItem(KEY_USER);
+        location.reload();
+      }
+    });
+
+    function getPosts(){ var a = loadJSON(KEY_POSTS, []); return Array.isArray(a)?a:[]; }
+    function savePosts(a){ saveJSON(KEY_POSTS, a); }
+    function sortMode(){ return localStorage.getItem(KEY_SORT) || "new"; }
+    function setSortMode(m){ localStorage.setItem(KEY_SORT, m); ui.sortBtn.textContent = m === "new" ? "сначала новые" : "сначала старые"; }
+
+    function renderPosts(){
+      var posts = getPosts();
+      var q = ui.searchInput.value.trim().toLowerCase();
+      if (q){ posts = posts.filter(function(p){ return (p.title+" "+p.body+" "+p.tag).toLowerCase().indexOf(q) !== -1; }); }
+      var m = sortMode();
+      posts.sort(function(a,b){ return m === "new" ? b.createdAt - a.createdAt : a.createdAt - b.createdAt; });
+      ui.postsBox.innerHTML = "";
+      if (!posts.length){ ui.postsBox.innerHTML = '<div class="empty">паст пока нет</div>'; return; }
+      posts.forEach(function(p){
+        var card = document.createElement("div"); card.className = "post";
+        var head = document.createElement("div"); head.className = "head";
+        var title = document.createElement("div"); title.className = "title";
+        var idSpan = document.createElement("span"); idSpan.className = "id"; idSpan.textContent = "#"+p.id;
+        var tSpan = document.createElement("span"); tSpan.textContent = p.title || "";
+        title.appendChild(idSpan); title.appendChild(tSpan);
+        var meta = document.createElement("div"); meta.className = "meta";
+        var tag = document.createElement("span"); tag.className = "tag"; tag.textContent = p.tag || "info";
+        var author = document.createElement("span"); author.className = "author"; author.textContent = "by @" + (p.author || "anon");
+        var date = document.createElement("span"); var d = new Date(p.createdAt);
+        date.textContent = d.toLocaleDateString()+" "+d.toLocaleTimeString().slice(0,5);
+        meta.appendChild(tag); meta.appendChild(author); meta.appendChild(date);
+        head.appendChild(title); head.appendChild(meta);
+        var body = document.createElement("div"); body.className = "body"; body.textContent = p.body || "";
+        card.appendChild(head); card.appendChild(body);
+        ui.postsBox.appendChild(card);
+      });
+    }
+    function nextId(){ var max = 0; getPosts().forEach(function(p){ if (p.id > max) max = p.id; }); return max + 1; }
+
+    ui.userSave.addEventListener("click", function(){
+      playClick();
+      var title = ui.uTitle.value.trim(); var body = ui.uBody.value.trim(); var tag = ui.uTag.value;
+      if (!title){ ui.uTitle.focus(); return; } if (!body){ ui.uBody.focus(); return; }
+      var arr = getPosts();
+      arr.push({ id: nextId(), title:title, body:body, tag:tag, createdAt: Date.now(), author: currentUser });
+      savePosts(arr); ui.uTitle.value = ""; ui.uBody.value = ""; ui.uTag.value = "info";
+      document.querySelectorAll(".topbar nav button").forEach(function(x){ x.classList.remove("active"); });
+      document.querySelector('.topbar nav button[data-view="posts"]').classList.add("active");
+      ["Search","Nick","Ip","Photo","Posts","Add","Chat"].forEach(v => ui["view"+v].style.display = "none");
+      ui.viewPosts.style.display = "block";
+      renderPosts();
+    });
+
+    function getChat(){ if (!currentUser) return []; var key = KEY_CHAT_PREFIX + currentUser; var a = loadJSON(key, []); return Array.isArray(a) ? a : []; }
+    function saveChat(a){ if (!currentUser) return; var key = KEY_CHAT_PREFIX + currentUser; saveJSON(key, a); }
+    function renderChat(){
+      var msgs = getChat(); ui.chatLog.innerHTML = "";
+      if (!msgs.length){ ui.chatLog.innerHTML = '<div class="empty" style="border:none;padding:20px">тут пока пусто. напиши админу.</div>'; ui.chatStatus.textContent = "закрыт"; return; }
+      msgs.forEach(function(m){
+        var el = document.createElement("div"); el.className = "chat-msg " + (m.from === "user" ? "me" : "admin");
+        var t = document.createElement("span"); t.className = "t"; var d = new Date(m.ts);
+        t.textContent = (m.from === "user" ? "ты" : "админ") + " · " + d.toLocaleTimeString().slice(0,5);
+        var txt = document.createElement("span"); txt.textContent = m.text;
+        el.appendChild(t); el.appendChild(txt); ui.chatLog.appendChild(el);
+      });
+      ui.chatLog.scrollTop = ui.chatLog.scrollHeight;
+      ui.chatStatus.textContent = "открыт · " + msgs.length + " сообщ.";
+    }
+    function sendChat(){ playClick(); var text = ui.chatInput.value.trim(); if (!text || !currentUser) return; var arr = getChat(); arr.push({ from:"user", text:text, ts: Date.now(), id: Date.now()+"_u" }); saveChat(arr); ui.chatInput.value = ""; renderChat(); }
+    ui.chatSend.addEventListener("click", sendChat);
+    ui.chatInput.addEventListener("keydown", function(e){ if (e.key === "Enter") sendChat(); });
+
+    document.querySelectorAll(".topbar nav button").forEach(function(b){
+      b.addEventListener("click", function(){
+        playClick();
+        document.querySelectorAll(".topbar nav button").forEach(function(x){ x.classList.remove("active"); });
+        b.classList.add("active");
+        var v = b.getAttribute("data-view");
+        ["search","nick","ip","photo","posts","add","chat"].forEach(function(view){
+          var el = document.getElementById("view" + view.charAt(0).toUpperCase() + view.slice(1));
+          if (el) el.style.display = (view === v) ? "block" : "none";
+        });
+        if (v === "chat") renderChat();
+        if (v === "posts") renderPosts();
+        ui.saveBtnMain.style.display = "none";
+        ui.saveBtnNick.style.display = "none";
+        ui.saveBtnIp.style.display = "none";
+      });
+    });
+
+    ui.searchInput.addEventListener("input", renderPosts);
+    ui.sortBtn.addEventListener("click", function(){ playClick(); var m = sortMode(); setSortMode(m === "new" ? "old" : "new"); renderPosts(); });
+
+    // --- ПОИСК ПО IP / ДОМЕНУ ---
+    async function searchIp() {
+      playClick();
+      ui.statusDot.classList.add("loading");
+      var q = ui.ipQuery.value.trim();
+      if (!q) { ui.ipQuery.focus(); ui.statusDot.classList.remove("loading"); return; }
+      ui.ipResults.innerHTML = "";
+      ui.ipStatus.textContent = "запрос...";
+      ui.saveBtnIp.style.display = "none";
+      currentReport = "ОТЧЕТ ПО " + q + "\n\n";
+
+      var isDomain = q.indexOf(".") !== -1 && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(q);
+
+      var card = document.createElement("div");
+      card.className = "res-card";
+      card.innerHTML = '<div class="rhead"><span class="rname">ip-api (гео)</span><span class="rstatus load">load</span></div><div class="result-body">запрос...</div>';
+      ui.ipResults.appendChild(card);
+
+      try {
+        var resp = await fetch("http://ip-api.com/json/" + encodeURIComponent(q) + "?fields=status,message,country,regionName,city,isp,org,as,query");
+        var data = await resp.json();
+
+        card.querySelector(".rstatus").className = "rstatus ok";
+        card.querySelector(".rstatus").textContent = "ok";
+        var body = card.querySelector(".result-body");
+        body.innerHTML = "";
+
+        if (data.status === "success") {
+          var fields = [
+            { k: "IP/Домен", v: data.query },
+            { k: "Страна", v: data.country },
+            { k: "Регион", v: data.regionName },
+            { k: "Город", v: data.city },
+            { k: "Провайдер", v: data.isp }
+          ];
+          fields.forEach(function(f) {
+            var row = document.createElement("div");
+            row.className = "field";
+            row.innerHTML = '<div class="k">' + f.k + '</div><div class="v">' + f.v + '</div>';
+            body.appendChild(row);
+            currentReport += f.k + ": " + f.v + "\n";
+          });
+        } else {
+          body.textContent = "IP не найден или неверный формат";
+        }
+      } catch(e) {
+        card.querySelector(".rstatus").className = "rstatus err";
+        card.querySelector(".rstatus").textContent = "err";
+        card.querySelector(".result-body").textContent = "ошибка: " + e.message;
+      }
+
+      if (isDomain) {
+        var rdapCard = document.createElement("div");
+        rdapCard.className = "res-card";
+        rdapCard.innerHTML = '<div class="rhead"><span class="rname">RDAP (домен)</span><span class="rstatus load">load</span></div><pre>запрос...</pre>';
+        ui.ipResults.appendChild(rdapCard);
+
+        try {
+          var r = await fetch("https://rdap.org/domain/" + encodeURIComponent(q));
+          if (r.status === 404) throw new Error("домен не найден");
+          if (!r.ok) throw new Error("http " + r.status);
+          
+          var d = await r.json();
+          rdapCard.querySelector(".rstatus").className = "rstatus ok";
+          rdapCard.querySelector(".rstatus").textContent = "ok";
+          
+          var info = "";
+          if (d.ldhName) info += "Домен: " + d.ldhName + "\n";
+          if (d.status) info += "Статус: " + d.status.join(", ") + "\n";
+          if (d.events) {
+            d.events.forEach(function(ev) {
+              if (ev.eventAction === "registration") info += "Регистрация: " + ev.eventDate + "\n";
+              if (ev.eventAction === "expiration") info += "Истекает: " + ev.eventDate + "\n";
+            });
+          }
+          if (d.entities) {
+            var reg = d.entities.find(e => e.roles && e.roles.includes("registrar"));
+            if (reg && reg.vcardArray) {
+              var fn = reg.vcardArray[1].find(x => x[0] === "fn");
+              if (fn) info += "Регистратор: " + fn[3] + "\n";
+            }
+          }
+          
+          if (!info) info = "Информация не найдена (возможно, скрыта регистратором).";
+          rdapCard.querySelector("pre").textContent = info;
+          currentReport += "\nRDAP:\n" + info;
+        } catch(e) {
+          rdapCard.querySelector(".rstatus").className = "rstatus err";
+          rdapCard.querySelector(".rstatus").textContent = "err";
+          rdapCard.querySelector("pre").textContent = e.message;
+        }
+      }
+
+      ui.saveBtnIp.style.display = "block";
+      ui.ipStatus.textContent = "готово";
+      ui.statusDot.classList.remove("loading");
+    }
+    ui.ipSearchBtn.addEventListener("click", searchIp);
+    ui.ipQuery.addEventListener("keydown", function(e){ if (e.key === "Enter") searchIp(); });
+
+    // --- ПОИСК ПО ФОТО ---
+    function searchPhoto() {
+      playClick();
+      var q = ui.photoQuery.value.trim();
+      if (!q) { ui.photoQuery.focus(); return; }
+      ui.photoResults.innerHTML = "";
+
+      var card = document.createElement("div");
+      card.className = "res-card";
+      card.innerHTML = `
+        <div class="rhead"><span class="rname">визуальный поиск</span><span class="rstatus ok">открыть</span></div>
+        <p style="margin-bottom:8px;color:var(--muted);font-size:11px;">Выбери поисковик. Если фото есть в интернете, он найдет источник и похожие лица.</p>
+        <div class="link-grid">
+          <a href="https://yandex.ru/images/search?rpt=imageview&url=${encodeURIComponent(q)}" target="_blank">Яндекс.Картинки</a>
+          <a href="https://lens.google.com/uploadbyurl?url=${encodeURIComponent(q)}" target="_blank">Google Lens</a>
+          <a href="https://www.bing.com/images/search?q=imgurl:${encodeURIComponent(q)}&view=detailv2&iss=sbi" target="_blank">Bing Visual</a>
+        </div>
+      `;
+      ui.photoResults.appendChild(card);
+    }
+    ui.photoSearchBtn.addEventListener("click", searchPhoto);
+    ui.photoQuery.addEventListener("keydown", function(e){ if (e.key === "Enter") searchPhoto(); });
+
+    // --- ПОИСК ПО НИКУ ---
+    async function searchNick(){
+      playClick();
+      ui.statusDot.classList.add("loading");
+      var q = ui.nickQuery.value.trim().toLowerCase();
+      if (!q) { ui.nickQuery.focus(); ui.statusDot.classList.remove("loading"); return; }
+      ui.nickResults.innerHTML = "";
+      ui.nickStatus.textContent = "запрос...";
+      ui.saveBtnNick.style.display = "none";
+      currentReport = "ОТЧЕТ ПО НИКУ: " + q + "\n\n";
+
+      var tgCard = document.createElement("div");
+      tgCard.className = "res-card";
+      tgCard.innerHTML = '<div class="rhead"><span class="rname">Telegram</span><span class="rstatus load">load</span></div><div class="result-body">проверка...</div>';
+      ui.nickResults.appendChild(tgCard);
+
+      try {
+        var resp = await fetch("https://t.me/" + encodeURIComponent(q));
+        var text = await resp.text();
+        var match = text.match(/<meta property="og:title" content="([^"]*)"/i);
+        
+        tgCard.querySelector(".rstatus").className = "rstatus ok";
+        tgCard.querySelector(".rstatus").textContent = "ok";
+        
+        if (match && match[1] && match[1] !== "Telegram: Contact") {
+           tgCard.querySelector(".result-body").textContent = "Аккаунт найден: " + match[1];
+           currentReport += "Telegram: Найден (" + match[1] + ")\n";
+        } else {
+           tgCard.querySelector(".result-body").textContent = "Аккаунт не найден или скрыт";
+           currentReport += "Telegram: Не найден\n";
+        }
+      } catch(e) {
+        tgCard.querySelector(".rstatus").className = "rstatus err";
+        tgCard.querySelector(".rstatus").textContent = "err";
+        tgCard.querySelector(".result-body").textContent = "CORS блокировка";
+      }
+
+      var quickCard = document.createElement("div");
+      quickCard.className = "res-card";
+      quickCard.innerHTML = `
+        <div class="rhead"><span class="rname">поиск на сайтах</span><span class="rstatus ok">ссылки</span></div>
+        <div class="link-grid">
+          <a href="https://whatsmyname.app/?q=${encodeURIComponent(q)}" target="_blank" style="border-color:var(--accent); color:#fff;">WhatsMyName (500+)</a>
+          <a href="https://github.com/${encodeURIComponent(q)}" target="_blank">GitHub</a>
+          <a href="https://vk.com/${encodeURIComponent(q)}" target="_blank">VK</a>
+          <a href="https://www.youtube.com/@${encodeURIComponent(q)}" target="_blank">YouTube</a>
+          <a href="https://www.reddit.com/user/${encodeURIComponent(q)}" target="_blank">Reddit</a>
+        </div>
+      `;
+      ui.nickResults.appendChild(quickCard);
+      currentReport += "Ссылки:\n- GitHub: https://github.com/"+q+"\n- VK: https://vk.com/"+q+"\n- WhatsMyName: https://whatsmyname.app/?q="+q+"\n";
+
+      ui.saveBtnNick.style.display = "block";
+      ui.nickStatus.textContent = "готово";
+      ui.statusDot.classList.remove("loading");
+    }
+    ui.nickSearchBtn.addEventListener("click", searchNick);
+    ui.nickQuery.addEventListener("keydown", function(e){ if (e.key === "Enter") searchNick(); });
+
+    // --- ОСНОВНОЙ ПОИСК (ТЕЛЕФОН / ПОЧТА) ---
+    async function search() {
+      playClick();
+      ui.statusDot.classList.add("loading");
+      var q = ui.query.value.trim();
+      if (!q) { ui.query.focus(); ui.statusDot.classList.remove("loading"); return; }
+      
+      ui.results.innerHTML = "";
+      ui.searchStatus.textContent = "запрос...";
+      ui.saveBtnMain.style.display = "none";
+      currentReport = "ОТЧЕТ ПО " + q + "\n\n";
+      
+      var isPhone = q.startsWith("+") || /^\d+$/.test(q.replace(/\D/g, ''));
+      var isEmail = q.indexOf("@") !== -1;
+
+      if (isPhone) {
+        var card = document.createElement("div");
+        card.className = "res-card";
+        card.innerHTML = '<div class="rhead"><span class="rname">numlookupapi</span><span class="rstatus load">load</span></div><div class="result-body">запрос...</div>';
+        ui.results.appendChild(card);
+
+        try {
+          var url = "https://api.numlookupapi.com/v1/validate/" + encodeURIComponent(q) + "?apikey=" + NUM_LOOKUP_KEY;
+          var resp = await fetch(url);
+          var data = await resp.json();
+
+          card.querySelector(".rstatus").className = "rstatus ok";
+          card.querySelector(".rstatus").textContent = "ok";
+          var body = card.querySelector(".result-body");
+          body.innerHTML = "";
+
+          if (data.valid) {
+            var fields = [
+              { k: "Страна", v: data.country_name || "—" },
+              { k: "Регион", v: data.location || "—" },
+              { k: "Оператор", v: data.carrier || "—" }
+            ];
+            fields.forEach(function(f) {
+              var row = document.createElement("div");
+              row.className = "field";
+              row.innerHTML = '<div class="k">' + f.k + '</div><div class="v">' + f.v + '</div>';
+              body.appendChild(row);
+              currentReport += f.k + ": " + f.v + "\n";
+            });
+          } else {
+            body.textContent = "номер недействителен";
+          }
+        } catch(e) {
+          card.querySelector(".rstatus").className = "rstatus err";
+          card.querySelector(".rstatus").textContent = "err";
+          card.querySelector(".result-body").textContent = "ошибка: " + e.message;
+        }
+
+        var gcCard = document.createElement("div");
+        gcCard.className = "res-card";
+        gcCard.innerHTML = `
+          <div class="rhead"><span class="rname">Getcontact</span><span class="rstatus ok">открыть</span></div>
+          <a href="https://getcontact.com/number-lookup/ru?q=${encodeURIComponent(q)}" target="_blank" class="btn btn-primary" style="text-decoration:none; display:inline-block; margin-top:8px;">Проверить в Getcontact</a>
+        `;
+        ui.results.appendChild(gcCard);
+      }
+
+      if (isEmail || isPhone) {
+        var c1 = document.createElement("div");
+        c1.className = "res-card";
+        c1.innerHTML = '<div class="rhead"><span class="rname">утечки (xposedornot)</span><span class="rstatus load">load</span></div><pre>запрос...</pre>';
+        ui.results.appendChild(c1);
+
+        try {
+          var r1 = await fetch("https://api.xposedornot.com/v1/check-email/" + encodeURIComponent(q));
+          var d1 = await r1.json();
+          c1.querySelector(".rstatus").className = "rstatus ok";
+          c1.querySelector(".rstatus").textContent = "ok";
+          c1.querySelector("pre").textContent = JSON.stringify(d1, null, 2);
+          currentReport += "\nУтечки:\n" + JSON.stringify(d1, null, 2);
+        } catch(e) {
+          c1.querySelector(".rstatus").className = "rstatus err";
+          c1.querySelector(".rstatus").textContent = "err";
+          c1.querySelector("pre").textContent = e.message;
+        }
+      }
+
+      if (isEmail) {
+        var c2 = document.createElement("div");
+        c2.className = "res-card";
+        c2.innerHTML = '<div class="rhead"><span class="rname">репутация (emailrep)</span><span class="rstatus load">load</span></div><pre>запрос...</pre>';
+        ui.results.appendChild(c2);
+
+        try {
+          var r2 = await fetch("https://emailrep.io/" + encodeURIComponent(q));
+          var d2 = await r2.json();
+          c2.querySelector(".rstatus").className = "rstatus ok";
+          c2.querySelector(".rstatus").textContent = "ok";
+          c2.querySelector("pre").textContent = JSON.stringify(d2, null, 2);
+          currentReport += "\nРепутация:\n" + JSON.stringify(d2, null, 2);
+        } catch(e) {
+          c2.querySelector(".rstatus").className = "rstatus err";
+          c2.querySelector(".rstatus").textContent = "err";
+          c2.querySelector("pre").textContent = e.message;
+        }
+      }
+
+      if (isEmail) {
+        var c3 = document.createElement("div");
+        c3.className = "res-card";
+        c3.innerHTML = '<div class="rhead"><span class="rname">HIBP (утечки по базам)</span><span class="rstatus load">load</span></div><pre>запрос...</pre>';
+        ui.results.appendChild(c3);
+
+        try {
+          var respHibp = await fetch("https://haveibeenpwned.com/api/v3/breachedaccount/" + encodeURIComponent(q) + "?truncateResponse=true", {
+            headers: { "hibp-api-key": HIBP_KEY, "User-Agent": "bestosint-local" }
+          });
+
+          if (respHibp.status === 404) {
+            c3.querySelector(".rstatus").className = "rstatus ok";
+            c3.querySelector(".rstatus").textContent = "ok";
+            c3.querySelector("pre").textContent = "Утечек не найдено (или аккаунт не в базе).";
+            currentReport += "\nHIBP: Утечек не найдено.\n";
+          } else if (respHibp.ok) {
+            var dHibp = await respHibp.json();
+            c3.querySelector(".rstatus").className = "rstatus ok";
+            c3.querySelector(".rstatus").textContent = "ok";
+            c3.querySelector("pre").textContent = JSON.stringify(dHibp, null, 2);
+            currentReport += "\nHIBP (утечки):\n" + JSON.stringify(dHibp, null, 2);
+          } else {
+            throw new Error("HTTP " + respHibp.status + " (нужен платный ключ)");
+          }
+        } catch(e) {
+          c3.querySelector(".rstatus").className = "rstatus err";
+          c3.querySelector(".rstatus").textContent = "err";
+          c3.querySelector("pre").textContent = "HIBP: " + e.message;
+        }
+      }
+
+      if (isEmail || isPhone) {
+        var c4 = document.createElement("div");
+        c4.className = "res-card";
+        c4.innerHTML = `
+          <div class="rhead"><span class="rname">проверка привязки</span><span class="rstatus ok">метод</span></div>
+          <p style="margin-bottom:8px;color:var(--muted);font-size:11px;">Открой страницу восстановления пароля. Если аккаунт привязан, сервис покажет замаскированную почту или номер.</p>
+          <div class="link-grid">
+            <a href="https://vk.com/restore" target="_blank">ВКонтакте</a>
+            <a href="https://help.steampowered.com/ru/wizard/HelpWithLoginInfo" target="_blank">Steam</a>
+            <a href="https://twitter.com/account/begin_password_reset" target="_blank">Twitter / X</a>
+            <a href="https://accounts.google.com/signin/recovery" target="_blank">Google</a>
+          </div>
+        `;
+        ui.results.appendChild(c4);
+        currentReport += "\nМетод проверки: 'Забыли пароль' на VK/Steam/Twitter/Google.\n";
+      }
+
+      ui.saveBtnMain.style.display = "block";
+      ui.searchStatus.textContent = "готово";
+      ui.statusDot.classList.remove("loading");
+    }
+
+    ui.searchBtn.addEventListener("click", search);
+    ui.query.addEventListener("keydown", function(e){ if (e.key === "Enter") search(); });
+
+    checkLogin();
+
+    window.addEventListener("storage", function(e){
+      if (e.key === KEY_POSTS) renderPosts();
+      if (currentUser && e.key === KEY_CHAT_PREFIX + currentUser) renderChat();
+    });
+  }
+})();
+</script>
+</body>
+</html>

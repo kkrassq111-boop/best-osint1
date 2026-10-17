@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bestosint // admin panel</title>
+<style>
+  :root{
+    --bg:#0a0505; --panel:#140808; --panel2:#1a0a0a; --border:#2e1414; --border2:#3d1a1a;
+    --text:#f0d9d9; --muted:#a86a6a; --dim:#6b3a3a;
+    --accent:#ff2a2a; --accent2:#ff6b6b; --ok:#3ecf8e; --err:#ff5566;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.5;min-height:100vh;padding:20px}
+
+  #loginScreen { display: flex; align-items: center; justify-content: center; height: 90vh; }
+  .login-box{width:100%;max-width:360px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:24px;text-align:center;box-shadow:0 0 30px -10px var(--accent)}
+  .login-box h2{color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:20px;font-size:16px}
+  .login-box input{width:100%;padding:12px;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:inherit;font-size:14px;margin-bottom:16px;text-align:center;outline:none}
+  .login-box input:focus{border-color:var(--accent)}
+  .login-box button{width:100%;padding:12px;background:var(--accent);color:#0a0505;border:none;border-radius:4px;font-weight:bold;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:1px}
+  .login-box button:hover{filter:brightness(1.15)}
+
+  #adminScreen { display: none; max-width: 1000px; margin: 0 auto; }
+  .topbar{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:15px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+  .topbar h1{font-size:18px;color:var(--accent);text-transform:uppercase}
+  .btn{padding:9px 16px;border:1px solid var(--border2);border-radius:4px;background:var(--panel2);color:var(--text);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:.15s}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn-danger{border-color:var(--err);color:var(--err)}
+  .btn-danger:hover{background:rgba(255,85,102,.1)}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:768px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:16px}
+  .panel h3{font-size:14px;color:var(--accent);margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px}
+  
+  .list{display:flex;flex-direction:column;gap:10px;max-height: 500px; overflow-y: auto;}
+  .item{background:var(--panel2);border:1px solid var(--border2);border-radius:6px;padding:12px;position:relative}
+  .item .title{font-weight:bold;color:#fff;margin-bottom:4px}
+  .item .meta{font-size:11px;color:var(--muted);margin-bottom:8px}
+  .item .body{font-size:12px;color:var(--text);margin-bottom:10px;max-height:100px;overflow:hidden;text-overflow:ellipsis}
+  .item .actions{display:flex;gap:8px}
+  .item .actions button{padding:4px 8px;font-size:11px;cursor:pointer;background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:4px}
+  .item .actions button:hover{color:var(--accent);border-color:var(--accent)}
+  
+  .chat-box{display:flex;flex-direction:column;gap:8px;height:400px;overflow-y:auto;margin-bottom:10px;background:#080303;padding:10px;border-radius:4px;border:1px solid var(--border)}
+  .msg{max-width:90%;padding:8px;border-radius:6px;font-size:12px}
+  .msg.user{background:var(--panel2);align-self:flex-start;border:1px solid var(--border2)}
+  .msg.admin{background:var(--accent);color:#0a0505;align-self:flex-end}
+  .chat-input{display:flex;gap:8px}
+  .chat-input input{flex:1;padding:8px;background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:4px;outline:none}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>admin auth</h2>
+    <input type="password" id="passInput" placeholder="введи пароль">
+    <button id="loginBtn">войти</button>
+  </div>
+</div>
+
+<div id="adminScreen">
+  <div class="topbar">
+    <h1>admin panel</h1>
+    <button class="btn" id="logoutBtn">выход</button>
+  </div>
+
+  <div class="grid">
+    <!-- Пасты -->
+    <div class="panel">
+      <h3>Управление пастами</h3>
+      <div class="list" id="postsList"></div>
+    </div>
+
+    <!-- Чаты -->
+    <div class="panel">
+      <h3>Чаты пользователей</h3>
+      <select id="chatSelect" style="width:100%;padding:8px;background:var(--bg);border:1px solid var(--border2);color:var(--text);margin-bottom:10px;border-radius:4px;">
+        <option value="">-- выбери пользователя --</option>
+      </select>
+      <div class="chat-box" id="chatBox"></div>
+      <div class="chat-input">
+        <input type="text" id="adminReply" placeholder="ответить...">
+        <button class="btn" id="sendReply">отпр</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  
+  // ПАРОЛЬ ДЛЯ ВХОДА В АДМИНКУ
+  const ADMIN_PASSWORD = "admin123";
+
+  const KEY_POSTS = "bestosint_posts_global";
+  const KEY_CHAT_PREFIX = "bestosint_chat_";
+
+  var ui = {
+    loginScreen: document.getElementById("loginScreen"),
+    adminScreen: document.getElementById("adminScreen"),
+    passInput: document.getElementById("passInput"),
+    loginBtn: document.getElementById("loginBtn"),
+    logoutBtn: document.getElementById("logoutBtn"),
+    postsList: document.getElementById("postsList"),
+    chatSelect: document.getElementById("chatSelect"),
+    chatBox: document.getElementById("chatBox"),
+    adminReply: document.getElementById("adminReply"),
+    sendReply: document.getElementById("sendReply")
+  };
+
+  var currentChatUser = null;
+
+  function loadJSON(k, f){ try { var r = localStorage.getItem(k); if (!r) return f; var v = JSON.parse(r); return v==null?f:v; } catch(e){ return f; } }
+  function saveJSON(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+  ui.loginBtn.addEventListener("click", () => {
+    if (ui.passInput.value === ADMIN_PASSWORD) {
+      sessionStorage.setItem("bst_admin_auth", "1");
+      showAdmin();
+    } else {
+      alert("неверный пароль");
+    }
+  });
+  ui.passInput.addEventListener("keydown", (e) => { if(e.key === "Enter") ui.loginBtn.click(); });
+  ui.logoutBtn.addEventListener("click", () => {
+    sessionStorage.removeItem("bst_admin_auth");
+    location.reload();
+  });
+
+  function checkAuth() {
+    if (sessionStorage.getItem("bst_admin_auth") === "1") showAdmin();
+  }
+  function showAdmin() {
+    ui.loginScreen.style.display = "none";
+    ui.adminScreen.style.display = "block";
+    renderPosts();
+    renderChatUsers();
+  }
+
+  function renderPosts() {
+    var posts = loadJSON(KEY_POSTS, []);
+    ui.postsList.innerHTML = "";
+    
+    if (!posts.length) {
+      ui.postsList.innerHTML = '<div style="color:var(--muted)">паст нет</div>';
+      return;
+    }
+
+    posts.sort((a,b) => b.createdAt - a.createdAt);
+
+    posts.forEach(p => {
+      var el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <div class="title">#${p.id} ${p.title}</div>
+        <div class="meta">Автор: @${p.author} | Дата: ${new Date(p.createdAt).toLocaleString()}</div>
+        <div class="body">${p.body}</div>
+        <div class="actions">
+          <button onclick="deletePost(${p.id})" style="color:var(--err);border-color:var(--err)">Удалить</button>
+        </div>
+      `;
+      ui.postsList.appendChild(el);
+    });
+  }
+
+  window.deletePost = function(id) {
+    if (!confirm("Удалить пасту #" + id + "?")) return;
+    var posts = loadJSON(KEY_POSTS, []);
+    posts = posts.filter(p => p.id !== id);
+    saveJSON(KEY_POSTS, posts);
+    renderPosts();
+  };
+
+  function renderChatUsers() {
+    ui.chatSelect.innerHTML = '<option value="">-- выбери пользователя --</option>';
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key.startsWith(KEY_CHAT_PREFIX)) {
+        var user = key.replace(KEY_CHAT_PREFIX, "");
+        var opt = document.createElement("option");
+        opt.value = user;
+        opt.textContent = "@" + user;
+        ui.chatSelect.appendChild(opt);
+      }
+    }
+  }
+
+  ui.chatSelect.addEventListener("change", (e) => {
+    currentChatUser = e.target.value;
+    renderChatMessages();
+  });
+
+  function renderChatMessages() {
+    ui.chatBox.innerHTML = "";
+    if (!currentChatUser) return;
+
+    var msgs = loadJSON(KEY_CHAT_PREFIX + currentChatUser, []);
+    msgs.forEach(m => {
+      var el = document.createElement("div");
+      el.className = "msg " + (m.from === "user" ? "user" : "admin");
+      el.innerHTML = `<div style="font-size:9px;opacity:0.6">${m.from === "user" ? "Юзер" : "Ты"}</div>${m.text}`;
+      ui.chatBox.appendChild(el);
+    });
+    ui.chatBox.scrollTop = ui.chatBox.scrollHeight;
+  }
+
+  ui.sendReply.addEventListener("click", () => {
+    var text = ui.adminReply.value.trim();
+    if (!text || !currentChatUser) return;
+    
+    var key = KEY_CHAT_PREFIX + currentChatUser;
+    var msgs = loadJSON(key, []);
+    msgs.push({ from: "admin", text: text, ts: Date.now() });
+    saveJSON(key, msgs);
+    
+    ui.adminReply.value = "";
+    renderChatMessages();
+  });
+  
+  ui.adminReply.addEventListener("keydown", (e) => { if(e.key === "Enter") ui.sendReply.click(); });
+
+  checkAuth();
+
+})();
+</script>
+</body>
+</html>
